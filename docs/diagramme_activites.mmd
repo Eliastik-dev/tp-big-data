@@ -1,0 +1,38 @@
+%% Diagramme d'activites du traitement des donnees
+flowchart TD
+    A(("debut")) --> B["Telecharger le dataset Kaggle"]
+    B --> C["Envoyer les CSV dans HDFS /nba/raw"]
+
+    subgraph EXTRACTION["Extraction"]
+        C --> D["Lire play_by_play.csv et game.csv avec Spark"]
+    end
+
+    subgraph TRANSFORMATION["Transformation (job 1)"]
+        D --> E["Garder saison reguliere + playoffs"]
+        E --> F["Supprimer les doublons et lignes sans game_id"]
+        F --> G["Convertir le chrono en temps restant"]
+        G --> H["Propager le score sur toutes les actions"]
+        H --> I{"Score coherent<br/>avec scoremargin ?"}
+        I -- non --> H2["Corriger le sens du score"] --> H
+        I -- oui --> J["Joindre le resultat du match"]
+        J --> K["Ecrire /nba/clean en Parquet"]
+    end
+
+    subgraph FEATURES["Calcul des features (job 2)"]
+        K --> L["Points marques par action"]
+        L --> M["Run sur 3 minutes + detection des runs"]
+        M --> N["Series de points et de tirs reussis"]
+        N --> O["Possession + rang de l'action"]
+        O --> P["Ecrire /nba/gold/features"]
+    end
+
+    subgraph CHARGEMENT["Chargement"]
+        P --> Q["Charger equipes, matchs, actions dans PostgreSQL"]
+        P --> R["Construire les sequences et entrainer le LSTM"]
+    end
+
+    Q --> S["Rejouer un match dans Kafka"]
+    R --> S
+    S --> T["Predire la proba de victoire a chaque action"]
+    T --> U["Afficher la courbe dans le dashboard"]
+    U --> Z(("fin"))

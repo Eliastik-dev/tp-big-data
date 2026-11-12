@@ -1,0 +1,52 @@
+%% Schema d'architecture du projet (a ouvrir sur https://mermaid.live ou a convertir en png)
+flowchart LR
+    subgraph SOURCE["Source"]
+        K[("Kaggle<br/>dataset NBA<br/>CSV 2,2 Go")]
+    end
+
+    subgraph INGESTION["Ingestion"]
+        PY["telechargement.py<br/>kagglehub"]
+        SH["envoi_hdfs.sh<br/>hdfs dfs -put"]
+    end
+
+    subgraph HDFS["Data lake - HDFS"]
+        RAW[("/nba/raw<br/>CSV bruts")]
+        CLEAN[("/nba/clean<br/>Parquet nettoye")]
+        GOLD[("/nba/gold<br/>features + stats")]
+    end
+
+    subgraph SPARK["Traitement batch - Spark"]
+        J1["Job 1<br/>nettoyage"]
+        J2["Job 2<br/>features + runs"]
+        J3["Job 3<br/>agregations"]
+    end
+
+    subgraph IA["IA - PyTorch"]
+        LSTM["Entrainement LSTM<br/>(GPU)"]
+        MOD[("lstm_nba.pt")]
+    end
+
+    PG[("PostgreSQL<br/>equipes, matchs, actions,<br/>stats, predictions")]
+
+    subgraph STREAM["Temps reel - Kafka"]
+        KA[["topic<br/>actions"]]
+        PRED["Service prediction<br/>Python + LSTM"]
+        KB[["topic<br/>predictions"]]
+    end
+
+    subgraph WEB["Dashboard"]
+        NODE["Serveur Node.js<br/>API + rejeu + WebSocket"]
+        REACT["Interface React<br/>courbe proba victoire"]
+    end
+
+    K --> PY --> SH --> RAW
+    RAW --> J1 --> CLEAN --> J2 --> GOLD
+    CLEAN --> J3
+    GOLD --> J3
+    J2 --> PG
+    J3 --> PG
+    GOLD --> LSTM --> MOD --> PRED
+    PG --> NODE
+    NODE -- "rejeu action par action" --> KA --> PRED --> KB --> NODE
+    PRED --> PG
+    NODE -- WebSocket --> REACT
